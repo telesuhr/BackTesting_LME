@@ -1,0 +1,15 @@
+{
+  "eikon_api_key": "1475940198b04fdab9265b7892546cc2ead9eda6",
+  "lme_rics": {
+    "Copper_3M": "CMCU3",
+    "Copper_15M": "CMCU15",
+    "Copper_Cash": "CMCU0"
+  },
+  "database": {
+    "host": "localhost",
+    "port": "5432",
+    "database": "lme_copper_db",
+    "user": "postgres",
+    "password": ""
+  }
+}

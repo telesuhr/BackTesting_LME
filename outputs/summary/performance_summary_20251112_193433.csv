@@ -1,0 +1,4 @@
+﻿Metal,Metal_Key,Strategy,Strategy_Key,Total_Return_%,Total_PnL_USD,Final_Capital_USD,Win_Rate_%,Total_Trades,Winning_Trades,Losing_Trades,Avg_Win_USD,Avg_Loss_USD,Max_Drawdown_%,Sharpe_Ratio,Total_Trading_Costs_USD
+銅,copper,RSI逆張り,rsi,121.17,121170.2,221170.2,67.17,920,618,302,1463.09,-2592.78,94.47,6.36,178279.79
+亜鉛,zinc,RSI逆張り,rsi,49.36,49364.37,149364.37,65.75,876,576,300,558.42,-907.62,15.92,7.58,50710.63
+アルミニウム,aluminium,RSI逆張り,rsi,-6.3,-6304.46,93695.54,66.06,875,578,297,400.69,-801.02,29.24,-0.29,46212.46

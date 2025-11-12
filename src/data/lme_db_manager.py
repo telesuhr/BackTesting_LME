@@ -243,3 +243,79 @@ class LMEDatabaseManager:
             return None
         finally:
             cursor.close()
+
+    def get_data_count(
+        self,
+        ric_code: str,
+        interval: str,
+        start_date: str = None,
+        end_date: str = None
+    ) -> int:
+        """
+        指定期間のデータ件数を取得
+
+        Args:
+            ric_code: RICコード
+            interval: データ間隔
+            start_date: 開始日（オプション）
+            end_date: 終了日（オプション）
+
+        Returns:
+            データ件数
+        """
+        if not self.conn:
+            self.connect()
+
+        cursor = self.conn.cursor()
+
+        try:
+            if start_date and end_date:
+                cursor.execute("""
+                    SELECT COUNT(*)
+                    FROM lme_copper_intraday_data
+                    WHERE ric_code = %s
+                      AND interval = %s
+                      AND timestamp >= %s::timestamp
+                      AND timestamp < %s::timestamp
+                """, (ric_code, interval, start_date, end_date))
+            else:
+                cursor.execute("""
+                    SELECT COUNT(*)
+                    FROM lme_copper_intraday_data
+                    WHERE ric_code = %s AND interval = %s
+                """, (ric_code, interval))
+
+            result = cursor.fetchone()
+            return result[0] if result else 0
+
+        except Exception as e:
+            logger.error(f"データ件数取得エラー: {e}")
+            return 0
+        finally:
+            cursor.close()
+
+    def save_data(
+        self,
+        df: pd.DataFrame,
+        ric_code: str,
+        interval: str = '15min'
+    ) -> int:
+        """
+        データをデータベースに保存（save_lme_intraday_dataのラッパー）
+
+        Args:
+            df: 保存するデータ
+            ric_code: RICコード
+            interval: データ間隔
+
+        Returns:
+            保存した行数
+        """
+        if not self.conn:
+            self.connect()
+
+        return self.save_lme_intraday_data(
+            ric_code=ric_code,
+            data=df,
+            interval=interval
+        )

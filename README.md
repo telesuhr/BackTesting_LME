@@ -8,7 +8,7 @@ Refinitiv API経由でLME（ロンドン金属取引所）の銅・アルミニ�
 
 - **データ取得**: LME銅（CMCU3）、アルミ（CMAL3）、亜鉛（CMZN3）の1分足データ取得
 - **データ管理**: PostgreSQLデータベースへの自動保存（キャッシュ機能）
-- **取引戦略**: ボリンジャーバンド（平均回帰）とモメンタム（トレンドフォロー）
+- **取引戦略**: 4つの戦略（ボリンジャーバンド、モメンタム、RSI逆張り、BB+RSI組み合わせ）
 - **バックテスト**: 1年間の履歴データを使った戦略検証
 - **可視化**: 詳細なチャートとパフォーマンス統計の自動生成
 
@@ -22,7 +22,9 @@ LMECopperTrading/
 │   │   └── lme_db_manager.py    # PostgreSQL データベース管理
 │   └── strategy/                # 取引戦略
 │       ├── bollinger_bands.py   # ボリンジャーバンド戦略
-│       └── momentum.py          # モメンタム戦略（MA クロスオーバー）
+│       ├── momentum.py          # モメンタム戦略（MA クロスオーバー）
+│       ├── rsi_reversal.py      # RSI逆張り戦略
+│       └── bollinger_rsi_combined.py # BB+RSI組み合わせ戦略
 ├── scripts/                     # 実行スクリプト
 │   ├── data_fetch/              # データ取得スクリプト
 │   │   ├── fetch_*_data.py     # 各商品のデータ取得
@@ -60,25 +62,50 @@ LMECopperTrading/
 - **パラメーター**: 短期MA5、長期MA20
 - **ポジションサイズ**: 固定100MT
 
+### 3. RSI逆張り戦略（平均回帰）
+- **エントリー**: RSI < 30（買い）/ RSI > 70（売り）
+- **イグジット**: RSI中立帯（40-60）復帰
+- **パラメーター**: RSI期間14、売買閾値30/70
+- **ポジションサイズ**: 固定100MT
+
+### 4. BB+RSI組み合わせ戦略（高精度平均回帰）
+- **エントリー**: ボリンジャー2σタッチ AND RSI売買ゾーン（両方一致時のみ）
+- **イグジット**: エントリー価格から±2σ移動
+- **パラメーター**: BB期間20/2.0σ、RSI期間14（30/70）
+- **ポジションサイズ**: 固定100MT
+
 ## バックテスト結果サマリー
 
-| 商品 | Bollinger Bands | Momentum |
-|------|----------------|----------|
-| **銅** | +27.02% (837回) | -601.89% (1,142回) |
-| **アルミニウム** | -50.27% (873回) | -51.04% (1,082回) |
-| **亜鉛** | **+85.65% (879回)** | -60.35% (1,063回) |
+| 商品 | Bollinger Bands | Momentum | RSI逆張り | BB+RSI組み合わせ |
+|------|----------------|----------|-----------|-----------------|
+| **銅** | +27.02% (837回) | -601.89% (1,142回) | **+121.17% (920回)** 🏆 | -56.18% (659回) |
+| **アルミニウム** | -50.27% (873回) | -51.04% (1,082回) | -6.30% (875回) | -7.73% (651回) |
+| **亜鉛** | +85.65% (879回) | -60.35% (1,063回) | +49.36% (876回) | **+110.95% (669回)** 🏆 |
 
 **期間**: 2024-11-11 ～ 2025-10-30
 **データ**: 15分足OHLCV
 **初期資本**: $100,000
 **取引コスト**: ブローカー手数料 $0.5 + スプレッド 0.01%
 
+### 詳細パフォーマンス指標
+
+#### 🥇 最優秀戦略
+| 戦略 | 商品 | リターン | 勝率 | Sharpe | Max DD | トレード数 |
+|------|------|----------|------|--------|--------|-----------|
+| **RSI逆張り** | 銅 | +121.17% | 67.17% | 6.36 | 15.66% | 920回 |
+| **BB+RSI組み合わせ** | 亜鉛 | +110.95% | 54.56% | **11.38** | **14.40%** | 669回 |
+| **Bollinger Bands** | 亜鉛 | +85.65% | 56.66% | 7.91 | 16.11% | 879回 |
+| **RSI逆張り** | 亜鉛 | +49.36% | 65.75% | 7.58 | 15.92% | 876回 |
+
 ### 主な発見
 
-1. **亜鉛はボリンジャーバンド戦略に最適** - 85.65%のリターン、シャープレシオ7.91
-2. **銅は中程度のパフォーマンス** - ボリンジャーで27%のリターン
-3. **アルミニウムは両戦略で不調** - どちらもマイナスリターン
-4. **モメンタム戦略は全商品で不良** - レンジ相場でのwhipsaw問題
+1. **亜鉛BB+RSI組み合わせが最優秀** - 110.95%のリターン、シャープレシオ11.38、低ドローダウン14.40%
+2. **銅RSI逆張りも極めて優秀** - 121.17%のリターン、勝率67.17%、安定したパフォーマンス
+3. **亜鉛は全般的に優秀** - 平均回帰戦略（BB、RSI、BB+RSI）すべてでプラス
+4. **銅BB+RSI組み合わせは失敗** - -56.18%の損失、資本マイナス警告多数（AND条件が逆効果）
+5. **アルミニウムは全戦略で不調** - すべての戦略でマイナスまたは微益
+6. **モメンタム戦略は全商品で不良** - レンジ相場でのwhipsaw問題
+7. **戦略の有効性は金属特性に強く依存** - 同じ戦略でも商品により結果が大きく異なる
 
 ## データベーススキーマ
 
@@ -173,24 +200,49 @@ python scripts/data_fetch/fetch_zinc_data.py
 
 ### 2. バックテスト実行
 
+#### 銅（CMCU3）
 ```bash
-# 銅 - ボリンジャーバンド戦略
+# ボリンジャーバンド戦略
 python scripts/backtest/visualize_backtest_1year.py
 
-# 銅 - モメンタム戦略
+# モメンタム戦略
 python scripts/backtest/visualize_backtest_momentum_1year.py
 
-# アルミニウム - ボリンジャーバンド戦略
+# RSI逆張り戦略
+python scripts/backtest/visualize_backtest_rsi_1year.py
+
+# BB+RSI組み合わせ戦略
+python scripts/backtest/visualize_backtest_bb_rsi_1year.py
+```
+
+#### アルミニウム（CMAL3）
+```bash
+# ボリンジャーバンド戦略
 python scripts/backtest/visualize_backtest_aluminium_1year.py
 
-# アルミニウム - モメンタム戦略
+# モメンタム戦略
 python scripts/backtest/visualize_backtest_momentum_aluminium_1year.py
 
-# 亜鉛 - ボリンジャーバンド戦略
+# RSI逆張り戦略
+python scripts/backtest/visualize_backtest_rsi_aluminium_1year.py
+
+# BB+RSI組み合わせ戦略
+python scripts/backtest/visualize_backtest_bb_rsi_aluminium_1year.py
+```
+
+#### 亜鉛（CMZN3）
+```bash
+# ボリンジャーバンド戦略
 python scripts/backtest/visualize_backtest_zinc_1year.py
 
-# 亜鉛 - モメンタム戦略
+# モメンタム戦略
 python scripts/backtest/visualize_backtest_momentum_zinc_1year.py
+
+# RSI逆張り戦略
+python scripts/backtest/visualize_backtest_rsi_zinc_1year.py
+
+# BB+RSI組み合わせ戦略
+python scripts/backtest/visualize_backtest_bb_rsi_zinc_1year.py
 ```
 
 ### 3. 出力ファイル
@@ -207,7 +259,10 @@ python scripts/backtest/visualize_backtest_momentum_zinc_1year.py
 3. 月別損益（月ごとのP&L）
 4. 勝敗分布（利益・損失のヒストグラム）
 
-ファイル名例: `bollinger_backtest_zinc_1year_100mt_20251111_185145.png`
+ファイル名例:
+- `bollinger_backtest_zinc_1year_100mt_20251111_185145.png`
+- `rsi_backtest_1year_100mt_20251111_212044.png`
+- `bb_rsi_backtest_1year_100mt_20251111_212104.png`
 
 ## データベース確認
 

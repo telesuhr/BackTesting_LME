@@ -1,0 +1,66 @@
+# LMEメタル取引バックテスト設定ファイル（テンプレート）
+# このファイルをコピーして backtest_config.yaml として使用してください
+# cp backtest_config.yaml.template backtest_config.yaml
+
+# 基本設定
+backtest:
+  # 対象メタル（複数指定可能）
+  # 選択肢: copper, aluminium, zinc, nickel, lead, tin
+  # 例: [copper, zinc, aluminium]
+  metals:
+    - copper
+
+  # 対象戦略（複数指定可能）
+  # 選択肢: bollinger, momentum, rsi, bb_rsi
+  # 例: [rsi, bollinger]
+  strategies:
+    - rsi
+
+  # バックテスト期間（YYYY-MM-DD形式）
+  # 注: データベースに存在する期間を指定してください
+  start_date: "2024-11-11"
+  end_date: "2025-11-11"
+
+  # データ間隔
+  # 選択肢: 1min, 5min, 10min, 15min, 30min, 1h, 1d, daily
+  # 注: 1min以外は自動的にリサンプリングされます
+  interval: "15min"
+
+  # 初期資本（USD）
+  initial_capital: 100000.0
+
+  # ポジションサイズ（MT: メトリックトン）
+  position_size: 100.0
+
+  # ブローカー手数料（USD、片道）
+  commission: 0.5
+
+  # スプレッド（パーセンテージ）
+  spread: 0.0001
+
+# 戦略固有パラメーター
+# 各戦略のパラメーターをカスタマイズできます
+strategies:
+  # RSI逆張り戦略
+  rsi:
+    rsi_period: 14           # RSI計算期間（デフォルト: 14）
+    rsi_oversold: 30.0       # 売られすぎ閾値（デフォルト: 30）
+    rsi_overbought: 70.0     # 買われすぎ閾値（デフォルト: 70）
+
+  # ボリンジャーバンド戦略
+  bollinger:
+    bb_period: 20            # BB計算期間（デフォルト: 20）
+    bb_std: 2.0              # BB標準偏差（デフォルト: 2.0）
+
+  # モメンタム戦略（MAクロスオーバー）
+  momentum:
+    ma_short: 5              # 短期MA期間（デフォルト: 5）
+    ma_long: 20              # 長期MA期間（デフォルト: 20）
+
+  # BB+RSI組み合わせ戦略
+  bb_rsi:
+    rsi_period: 14
+    rsi_oversold: 30.0
+    rsi_overbought: 70.0
+    bb_period: 20
+    bb_std: 2.0

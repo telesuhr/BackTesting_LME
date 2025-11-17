@@ -1,5 +1,6 @@
 # API Keys and Config
 config.json
+backtest_config.yaml
 
 # Python
 __pycache__/

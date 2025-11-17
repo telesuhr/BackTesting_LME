@@ -25,6 +25,7 @@ from typing import List, Optional, Dict, Any
 import importlib
 import pandas as pd
 import psycopg2
+import yaml
 import matplotlib
 matplotlib.use('Agg')  # GUIなし環境対応
 import matplotlib.pyplot as plt
@@ -56,6 +57,34 @@ logger = logging.getLogger(__name__)
 # 日本語フォント設定
 plt.rcParams['font.sans-serif'] = ['Hiragino Sans', 'Arial Unicode MS', 'DejaVu Sans']
 plt.rcParams['axes.unicode_minus'] = False
+
+
+def load_config_from_yaml(config_path: str) -> Optional[Dict[str, Any]]:
+    """
+    YAMLファイルから設定を読み込む
+
+    Args:
+        config_path: YAML設定ファイルのパス
+
+    Returns:
+        設定辞書（読み込みに失敗した場合はNone）
+    """
+    try:
+        if not os.path.exists(config_path):
+            logger.warning(f"設定ファイルが見つかりません: {config_path}")
+            return None
+
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+
+        logger.info(f"設定ファイル読み込み成功: {config_path}")
+        return config
+
+    except Exception as e:
+        logger.error(f"設定ファイル読み込みエラー: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
 
 
 def load_data(ric_code: str, start_date: str, end_date: str, interval: str = '15min') -> Optional[pd.DataFrame]:
@@ -616,6 +645,9 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 使用例:
+  # YAML設定ファイルから実行（推奨）
+  python scripts/backtest/run_all_backtests.py --config backtest_config.yaml
+
   # 全メタル×全戦略を実行
   python scripts/backtest/run_all_backtests.py
 
@@ -627,7 +659,17 @@ def main():
 
   # 組み合わせ指定
   python scripts/backtest/run_all_backtests.py --metals copper aluminium --strategies bollinger rsi
+
+  # YAML + コマンドライン引数のオーバーライド
+  python scripts/backtest/run_all_backtests.py --config backtest_config.yaml --metals copper
         """
+    )
+
+    parser.add_argument(
+        '--config',
+        type=str,
+        default='backtest_config.yaml',
+        help='YAML設定ファイルのパス (デフォルト: backtest_config.yaml)'
     )
 
     parser.add_argument(
@@ -743,6 +785,61 @@ def main():
     )
 
     args = parser.parse_args()
+
+    # YAML設定ファイルから読み込み
+    yaml_config = load_config_from_yaml(args.config)
+
+    # YAML設定とコマンドライン引数をマージ
+    # 優先順位: コマンドライン引数 > YAML設定 > デフォルト値
+    if yaml_config:
+        backtest_config = yaml_config.get('backtest', {})
+        strategies_config = yaml_config.get('strategies', {})
+
+        # 基本パラメーター（YAMLから取得、CLI引数がNoneでない場合はCLIを優先）
+        if args.metals is None and backtest_config.get('metals'):
+            args.metals = backtest_config['metals']
+        if args.strategies is None and backtest_config.get('strategies'):
+            args.strategies = backtest_config['strategies']
+        if args.start is None and backtest_config.get('start_date'):
+            args.start = backtest_config['start_date']
+        if args.end is None and backtest_config.get('end_date'):
+            args.end = backtest_config['end_date']
+
+        # interval, initial_capital等のデフォルト値チェック
+        # argparseのdefault値と比較して、デフォルトのままならYAMLを採用
+        if args.interval == '15min' and backtest_config.get('interval'):
+            args.interval = backtest_config['interval']
+        if args.initial_capital == 100000.0 and backtest_config.get('initial_capital'):
+            args.initial_capital = backtest_config['initial_capital']
+        if args.position_size == 100.0 and backtest_config.get('position_size'):
+            args.position_size = backtest_config['position_size']
+        if args.commission == 0.5 and backtest_config.get('commission'):
+            args.commission = backtest_config['commission']
+        if args.spread == 0.0001 and backtest_config.get('spread'):
+            args.spread = backtest_config['spread']
+
+        # 戦略固有パラメーター（RSI）
+        rsi_config = strategies_config.get('rsi', {})
+        if args.rsi_period == 14 and rsi_config.get('rsi_period'):
+            args.rsi_period = rsi_config['rsi_period']
+        if args.rsi_oversold == 30.0 and rsi_config.get('rsi_oversold'):
+            args.rsi_oversold = rsi_config['rsi_oversold']
+        if args.rsi_overbought == 70.0 and rsi_config.get('rsi_overbought'):
+            args.rsi_overbought = rsi_config['rsi_overbought']
+
+        # ボリンジャーバンド
+        bb_config = strategies_config.get('bollinger', {})
+        if args.bb_period == 20 and bb_config.get('bb_period'):
+            args.bb_period = bb_config['bb_period']
+        if args.bb_std == 2.0 and bb_config.get('bb_std'):
+            args.bb_std = bb_config['bb_std']
+
+        # モメンタム
+        momentum_config = strategies_config.get('momentum', {})
+        if args.ma_short == 5 and momentum_config.get('ma_short'):
+            args.ma_short = momentum_config['ma_short']
+        if args.ma_long == 20 and momentum_config.get('ma_long'):
+            args.ma_long = momentum_config['ma_long']
 
     # バックテスト実行
     results = run_all_backtests(

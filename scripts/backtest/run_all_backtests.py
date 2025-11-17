@@ -107,12 +107,21 @@ def load_data(ric_code: str, start_date: str, end_date: str, interval: str = '15
 
 
 def create_strategy_instance(strategy_key: str):
-    """戦略インスタンスを動的に作成"""
+    """
+    戦略インスタンスを動的に作成
+
+    config/metals_config.pyの設定から戦略クラスを動的にロードします。
+    新しい戦略を追加する場合は、metals_config.pyのSTRATEGIES_CONFIGに
+    追加するだけで自動的に利用可能になります（スクリプト修正不要）。
+
+    例: 'rsi' → 'src.strategy.rsi_reversal.RSIReversalStrategy'
+    """
     strategy_config = get_strategy_config(strategy_key)
 
     # モジュールとクラスを動的にインポート
-    module_path = strategy_config['module']
-    class_name = strategy_config['class_name']
+    # importlibを使って文字列からモジュールとクラスをロード
+    module_path = strategy_config['module']  # 例: 'src.strategy.rsi_reversal'
+    class_name = strategy_config['class_name']  # 例: 'RSIReversalStrategy'
 
     module = importlib.import_module(module_path)
     strategy_class = getattr(module, class_name)

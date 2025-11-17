@@ -90,36 +90,48 @@ def fetch_metal_data(
         # APIクライアント初期化
         api_client = LMEDataClient()
 
-        # 日付文字列をdatetimeに変換
-        from datetime import datetime as dt
-        start_dt = dt.strptime(start_date, '%Y-%m-%d')
-        end_dt = dt.strptime(end_date, '%Y-%m-%d')
+        try:
+            # APIセッション接続
+            # 重要: Refinitiv Workspace/Eikon Desktopが起動している必要があります
+            # セッションを明示的に開始しないと "No default session created yet" エラーが発生します
+            api_client.connect()
 
-        # データ取得
-        df = api_client.get_lme_intraday_data(
-            ric_code=ric_code,
-            start_date=start_dt,
-            end_date=end_dt,
-            interval=interval
-        )
+            # 日付文字列をdatetimeに変換
+            # LMEDataClient.get_lme_intraday_data()はdatetimeオブジェクトを要求します
+            from datetime import datetime as dt
+            start_dt = dt.strptime(start_date, '%Y-%m-%d')
+            end_dt = dt.strptime(end_date, '%Y-%m-%d')
 
-        if df is None or df.empty:
-            logger.warning(f"{metal_name}のデータ取得に失敗しました")
-            return False
+            # データ取得
+            df = api_client.get_lme_intraday_data(
+                ric_code=ric_code,
+                start_date=start_dt,
+                end_date=end_dt,
+                interval=interval
+            )
 
-        logger.info(f"取得データ: {len(df)}行")
+            if df is None or df.empty:
+                logger.warning(f"{metal_name}のデータ取得に失敗しました")
+                return False
 
-        # データベースに保存
-        saved_count = db_manager.save_data(
-            df=df,
-            ric_code=ric_code,
-            interval=interval
-        )
+            logger.info(f"取得データ: {len(df)}行")
 
-        logger.info(f"{metal_name}データ保存完了: {saved_count}件")
-        logger.info(f"=" * 60)
+            # データベースに保存
+            saved_count = db_manager.save_data(
+                df=df,
+                ric_code=ric_code,
+                interval=interval
+            )
 
-        return True
+            logger.info(f"{metal_name}データ保存完了: {saved_count}件")
+            logger.info(f"=" * 60)
+
+            return True
+
+        finally:
+            # APIセッション切断
+            # 各メタル取得ごとにセッションをクリーンに切断します
+            api_client.disconnect()
 
     except Exception as e:
         logger.error(f"{metal_key}データ取得エラー: {e}")

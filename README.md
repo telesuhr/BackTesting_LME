@@ -1,52 +1,63 @@
 # LME金属取引バックテストシステム
 
-Refinitiv API経由でLME（ロンドン金属取引所）の銅・アルミニウム・亜鉛のデータを取得し、取引戦略のバックテストを実行するシステムです。
+Refinitiv API経由でLME（ロンドン金属取引所）の6金属のデータを取得し、複数の取引戦略を一括でバックテストする統一システムです。
 
 ## 概要
 
 このシステムは以下の機能を提供します：
 
-- **データ取得**: LME銅（CMCU3）、アルミ（CMAL3）、亜鉛（CMZN3）の1分足データ取得
-- **データ管理**: PostgreSQLデータベースへの自動保存（キャッシュ機能）
-- **取引戦略**: 4つの戦略（ボリンジャーバンド、モメンタム、RSI逆張り、BB+RSI組み合わせ）
-- **バックテスト**: 1年間の履歴データを使った戦略検証
-- **可視化**: 詳細なチャートとパフォーマンス統計の自動生成
+- **6メタル対応**: 銅、アルミニウム、亜鉛、ニッケル、鉛、錫の統一管理
+- **データ取得**: 1分足データ取得とPostgreSQLキャッシュ機能
+- **4つの取引戦略**: ボリンジャーバンド、モメンタム、RSI逆張り、BB+RSI組み合わせ
+- **一括バックテスト**: 全メタル×全戦略の組み合わせを1コマンドで実行
+- **自動サマリー生成**: CSV/Markdown形式のパフォーマンスレポート自動作成
+- **詳細可視化**: 4パネルチャート（価格・エクイティ・月別P&L・勝敗分布）
 
 ## プロジェクト構造
 
 ```
 LMECopperTrading/
-├── src/                          # ソースコード
-│   ├── data/                     # データ取得・管理
-│   │   ├── lme_client.py        # Refinitiv API クライアント
-│   │   └── lme_db_manager.py    # PostgreSQL データベース管理
-│   └── strategy/                # 取引戦略
-│       ├── bollinger_bands.py   # ボリンジャーバンド戦略
-│       ├── momentum.py          # モメンタム戦略（MA クロスオーバー）
-│       ├── rsi_reversal.py      # RSI逆張り戦略
+├── config/
+│   └── metals_config.py          # 統一設定ファイル（6メタル×4戦略）
+├── src/
+│   ├── data/
+│   │   ├── lme_client.py         # Refinitiv API クライアント
+│   │   └── lme_db_manager.py     # PostgreSQL データベース管理
+│   └── strategy/
+│       ├── bollinger_bands.py    # ボリンジャーバンド戦略
+│       ├── momentum.py           # モメンタム戦略（MA クロスオーバー）
+│       ├── rsi_reversal.py       # RSI逆張り戦略
 │       └── bollinger_rsi_combined.py # BB+RSI組み合わせ戦略
-├── scripts/                     # 実行スクリプト
-│   ├── data_fetch/              # データ取得スクリプト
-│   │   ├── fetch_*_data.py     # 各商品のデータ取得
-│   │   └── resample_*.py       # データリサンプリング
-│   └── backtest/                # バックテストスクリプト
-│       ├── run_backtest_*.py   # バックテスト実行
-│       └── visualize_*.py      # 結果可視化
-├── outputs/                     # 出力ファイル
-│   ├── copper/                  # 銅の分析結果
-│   ├── aluminium/               # アルミニウムの分析結果
-│   ├── zinc/                    # 亜鉛の分析結果
-│   └── archive/                 # 古いファイル
-└── config.json                  # API設定ファイル
+├── scripts/
+│   ├── data_fetch/
+│   │   └── fetch_all_metals.py   # 統一データ取得スクリプト
+│   ├── backtest/
+│   │   ├── run_all_backtests.py  # 統一バックテスト実行
+│   │   └── generate_summary.py   # 結果サマリー自動生成
+│   └── archive/                  # 旧スクリプト（参考用）
+├── outputs/
+│   ├── copper/                   # 銅の分析結果
+│   ├── aluminium/                # アルミニウムの分析結果
+│   ├── zinc/                     # 亜鉛の分析結果
+│   ├── nickel/                   # ニッケルの分析結果
+│   ├── lead/                     # 鉛の分析結果
+│   ├── tin/                      # 錫の分析結果
+│   └── summary/                  # パフォーマンスサマリー（CSV/MD）
+├── database/
+│   └── lme_schema.sql            # データベーススキーマ
+└── config.json                   # API設定ファイル
 ```
 
 ## 対象商品
 
-| 商品 | RICコード | 説明 |
-|------|----------|------|
-| 銅 | CMCU3 | LME銅3ヶ月先物 |
-| アルミニウム | CMAL3 | LMEアルミニウム3ヶ月先物 |
-| 亜鉛 | CMZN3 | LME亜鉛3ヶ月先物 |
+| 商品 | RICコード | 英名 | データ状況 |
+|------|----------|------|-----------|
+| 銅 | CMCU3 | Copper | ✅ 2024-11-11 ~ 2025-11-14 (1min) |
+| アルミニウム | CMAL3 | Aluminium | ✅ 2024-11-11 ~ 2025-11-14 (1min) |
+| 亜鉛 | CMZN3 | Zinc | ✅ 2024-11-11 ~ 2025-11-14 (1min) |
+| ニッケル | CMNI3 | Nickel | 未取得 |
+| 鉛 | CMPB3 | Lead | 未取得 |
+| 錫 | CMSN3 | Tin | 未取得 |
 
 ## 取引戦略
 
@@ -74,69 +85,27 @@ LMECopperTrading/
 - **パラメーター**: BB期間20/2.0σ、RSI期間14（30/70）
 - **ポジションサイズ**: 固定100MT
 
-## バックテスト結果サマリー
+## 最新バックテスト結果（RSI逆張り戦略）
 
-| 商品 | Bollinger Bands | Momentum | RSI逆張り | BB+RSI組み合わせ |
-|------|----------------|----------|-----------|-----------------|
-| **銅** | +27.02% (837回) | -601.89% (1,142回) | **+121.17% (920回)** 🏆 | -56.18% (659回) |
-| **アルミニウム** | -50.27% (873回) | -51.04% (1,082回) | -6.30% (875回) | -7.73% (651回) |
-| **亜鉛** | +85.65% (879回) | -60.35% (1,063回) | +49.36% (876回) | **+110.95% (669回)** 🏆 |
-
-**期間**: 2024-11-11 ～ 2025-10-30
-**データ**: 15分足OHLCV
+**期間**: 2024-11-11 ~ 2025-10-30
+**データ**: 1分足 → 15分足リサンプリング
 **初期資本**: $100,000
-**取引コスト**: ブローカー手数料 $0.5 + スプレッド 0.01%
 
-### 詳細パフォーマンス指標
+| メタル | リターン | 勝率 | Sharpe | Max DD | トレード数 | P&L |
+|--------|----------|------|--------|--------|-----------|-----|
+| 銅 | **121.2%** 🏆 | 67.2% | 6.36 | 94.5% | 920回 | $121.2k |
+| 亜鉛 | **49.4%** | 65.8% | 7.58 | 15.9% | 876回 | $49.4k |
+| アルミニウム | -6.3% | 66.1% | -0.29 | 29.2% | 875回 | $-6.3k |
 
-#### 🥇 最優秀戦略
-| 戦略 | 商品 | リターン | 勝率 | Sharpe | Max DD | トレード数 |
-|------|------|----------|------|--------|--------|-----------|
-| **RSI逆張り** | 銅 | +121.17% | 67.17% | 6.36 | 15.66% | 920回 |
-| **BB+RSI組み合わせ** | 亜鉛 | +110.95% | 54.56% | **11.38** | **14.40%** | 669回 |
-| **Bollinger Bands** | 亜鉛 | +85.65% | 56.66% | 7.91 | 16.11% | 879回 |
-| **RSI逆張り** | 亜鉛 | +49.36% | 65.75% | 7.58 | 15.92% | 876回 |
-
-### 主な発見
-
-1. **亜鉛BB+RSI組み合わせが最優秀** - 110.95%のリターン、シャープレシオ11.38、低ドローダウン14.40%
-2. **銅RSI逆張りも極めて優秀** - 121.17%のリターン、勝率67.17%、安定したパフォーマンス
-3. **亜鉛は全般的に優秀** - 平均回帰戦略（BB、RSI、BB+RSI）すべてでプラス
-4. **銅BB+RSI組み合わせは失敗** - -56.18%の損失、資本マイナス警告多数（AND条件が逆効果）
-5. **アルミニウムは全戦略で不調** - すべての戦略でマイナスまたは微益
-6. **モメンタム戦略は全商品で不良** - レンジ相場でのwhipsaw問題
-7. **戦略の有効性は金属特性に強く依存** - 同じ戦略でも商品により結果が大きく異なる
-
-## データベーススキーマ
-
-```sql
-CREATE TABLE lme_copper_intraday_data (
-    id SERIAL PRIMARY KEY,
-    ric_code VARCHAR(10),
-    interval VARCHAR(10),
-    timestamp TIMESTAMP,
-    open DOUBLE PRECISION,
-    high DOUBLE PRECISION,
-    low DOUBLE PRECISION,
-    close DOUBLE PRECISION,
-    volume BIGINT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(ric_code, interval, timestamp)
-);
-```
+**統計サマリー**:
+- 平均リターン: 54.74%
+- プラスリターン: 2/3銘柄 (66.7%)
+- 平均勝率: 66.3%
+- 平均Sharpe: 4.55
 
 ## セットアップ
 
 ### 1. データベースの準備
-
-PostgreSQLデータベース `lme_copper_db` が既に存在する場合：
-
-```bash
-# スキーマを適用
-psql -U postgres -d lme_copper_db -f database/lme_schema.sql
-```
-
-新規作成する場合：
 
 ```bash
 # データベースを作成
@@ -148,9 +117,7 @@ psql -U postgres -d lme_copper_db -f database/lme_schema.sql
 
 ### 2. APIキーの設定
 
-以下のいずれかの方法でRefinitiv APIキーを設定：
-
-#### 方法1: config.jsonファイル（推奨）
+**方法1: config.jsonファイル（推奨）**
 
 ```bash
 # テンプレートをコピー
@@ -158,17 +125,14 @@ cp config.json.template config.json
 
 # config.jsonを編集してAPIキーを設定
 # {
-#   "refinitiv_api_key": "YOUR_API_KEY_HERE",
-#   ...
+#   "refinitiv_api_key": "YOUR_API_KEY_HERE"
 # }
 ```
 
-#### 方法2: 環境変数
+**方法2: 環境変数**
 
 ```bash
 export REFINITIV_API_KEY="your_api_key_here"
-# または
-export EIKON_API_KEY="your_api_key_here"
 ```
 
 ### 3. 依存パッケージのインストール
@@ -181,77 +145,59 @@ pip install -r requirements.txt
 - refinitiv-data >= 1.0.0
 - pandas >= 2.0.0
 - psycopg2-binary >= 2.9.0
-- pytest >= 7.4.0
+- matplotlib >= 3.7.0
 
 ## 使用方法
 
-### 1. データ取得
+### 1. データ取得（統一スクリプト）
 
 ```bash
-# 銅データ取得（2024-11-11 ~ 2025-11-11）
-python scripts/data_fetch/fetch_missing_data.py
+# 全6メタルのデータ取得（1min足）
+python scripts/data_fetch/fetch_all_metals.py
 
-# アルミニウムデータ取得
-python scripts/data_fetch/fetch_aluminium_data.py
+# 特定メタルのみ取得
+python scripts/data_fetch/fetch_all_metals.py --metals copper zinc nickel
 
-# 亜鉛データ取得
-python scripts/data_fetch/fetch_zinc_data.py
+# 期間指定
+python scripts/data_fetch/fetch_all_metals.py --start 2024-01-01 --end 2025-01-01
+
+# インターバル指定（デフォルト: 1min）
+python scripts/data_fetch/fetch_all_metals.py --interval 1min
+
+# 強制再取得（キャッシュ無視）
+python scripts/data_fetch/fetch_all_metals.py --force-refresh
 ```
 
-### 2. バックテスト実行
+**重要**:
+- 現在は**1分足データのみ**を取得します
+- 5分足・15分足などは1分足からリサンプリングで生成できます
+- Refinitiv APIは`15min`インターバルをサポートしていません
+- サポート対象: `1min`, `5min`, `10min`, `30min`, `60min`, `hourly`, `daily`
 
-#### 銅（CMCU3）
+### 2. バックテスト実行（統一スクリプト）
+
 ```bash
-# ボリンジャーバンド戦略
-python scripts/backtest/visualize_backtest_1year.py
+# 全メタル×全戦略のバックテストを一括実行
+python scripts/backtest/run_all_backtests.py
 
-# モメンタム戦略
-python scripts/backtest/visualize_backtest_momentum_1year.py
+# 特定メタルのみ実行
+python scripts/backtest/run_all_backtests.py --metals copper zinc
 
-# RSI逆張り戦略
-python scripts/backtest/visualize_backtest_rsi_1year.py
+# 特定戦略のみ実行
+python scripts/backtest/run_all_backtests.py --strategies rsi bb_rsi
 
-# BB+RSI組み合わせ戦略
-python scripts/backtest/visualize_backtest_bb_rsi_1year.py
+# 期間指定
+python scripts/backtest/run_all_backtests.py --start 2024-11-11 --end 2025-11-11
 ```
 
-#### アルミニウム（CMAL3）
-```bash
-# ボリンジャーバンド戦略
-python scripts/backtest/visualize_backtest_aluminium_1year.py
-
-# モメンタム戦略
-python scripts/backtest/visualize_backtest_momentum_aluminium_1year.py
-
-# RSI逆張り戦略
-python scripts/backtest/visualize_backtest_rsi_aluminium_1year.py
-
-# BB+RSI組み合わせ戦略
-python scripts/backtest/visualize_backtest_bb_rsi_aluminium_1year.py
-```
-
-#### 亜鉛（CMZN3）
-```bash
-# ボリンジャーバンド戦略
-python scripts/backtest/visualize_backtest_zinc_1year.py
-
-# モメンタム戦略
-python scripts/backtest/visualize_backtest_momentum_zinc_1year.py
-
-# RSI逆張り戦略
-python scripts/backtest/visualize_backtest_rsi_zinc_1year.py
-
-# BB+RSI組み合わせ戦略
-python scripts/backtest/visualize_backtest_bb_rsi_zinc_1year.py
-```
+**実行結果**:
+- 各メタル×戦略の組み合わせごとに可視化PNG生成
+- 自動的にCSV/Markdownサマリーが `outputs/summary/` に生成されます
 
 ### 3. 出力ファイル
 
-バックテスト結果は `outputs/` フォルダに商品別に保存されます：
-
-- `outputs/copper/` - 銅の分析結果
-- `outputs/aluminium/` - アルミニウムの分析結果
-- `outputs/zinc/` - 亜鉛の分析結果
+**個別バックテスト結果**: `outputs/{metal}/`
+- 例: `outputs/copper/rsi_backtest_1year_100mt_20251112_193418.png`
 
 各グラフには以下が含まれます：
 1. 価格チャート（エントリー/エグジットポイント表示）
@@ -259,84 +205,158 @@ python scripts/backtest/visualize_backtest_bb_rsi_zinc_1year.py
 3. 月別損益（月ごとのP&L）
 4. 勝敗分布（利益・損失のヒストグラム）
 
-ファイル名例:
-- `bollinger_backtest_zinc_1year_100mt_20251111_185145.png`
-- `rsi_backtest_1year_100mt_20251111_212044.png`
-- `bb_rsi_backtest_1year_100mt_20251111_212104.png`
+**パフォーマンスサマリー**: `outputs/summary/`
+- CSV: `performance_summary_20251112_193433.csv`
+- Markdown: `performance_summary_20251112_193433.md`
 
-## データベース確認
+サマリーには以下が含まれます：
+- 全体ランキング（リターン降順）
+- メタル別パフォーマンス
+- 戦略別パフォーマンス
+- トップ10パフォーマー
+- 統計サマリー
 
-### psqlで直接確認
+## Before/After（統一システムのメリット）
+
+### Before（旧システム）
+```bash
+# 3メタル×4戦略 = 12回の個別実行が必要
+python scripts/backtest/visualize_backtest_rsi_1year.py
+python scripts/backtest/visualize_backtest_rsi_aluminium_1year.py
+python scripts/backtest/visualize_backtest_rsi_zinc_1year.py
+python scripts/backtest/visualize_backtest_bb_rsi_1year.py
+# ... 合計12コマンド
+```
+
+### After（新システム）
+```bash
+# 1コマンドで全て完了
+python scripts/backtest/run_all_backtests.py
+```
+
+**改善点**:
+- スクリプト数: 31個 → 3個
+- 実行コマンド: 12回 → 1回
+- 設定管理: 分散 → 統一（config/metals_config.py）
+- メタル追加: 各スクリプト修正 → config修正のみ
+- 結果集計: 手動 → 自動（CSV/MD生成）
+
+## データベース管理
+
+### データ確認
 
 ```bash
 # データベースに接続
 psql -U postgres -d lme_copper_db
 
 # データサマリーを表示
-SELECT * FROM lme_data_summary;
+SELECT
+    ric_code,
+    interval,
+    COUNT(*) as records,
+    MIN(timestamp) as start_date,
+    MAX(timestamp) as end_date
+FROM lme_copper_intraday_data
+GROUP BY ric_code, interval
+ORDER BY ric_code, interval;
 
 # 最新データを確認
 SELECT * FROM lme_copper_intraday_data
-WHERE ric_code = 'CMCU3'
+WHERE ric_code = 'CMCU3' AND interval = '1min'
 ORDER BY timestamp DESC
 LIMIT 10;
-
-# レコード数を確認
-SELECT ric_code, interval, COUNT(*) as count
-FROM lme_copper_intraday_data
-GROUP BY ric_code, interval;
 ```
 
-## 技術スタック
+### データベーススキーマ
 
-- **データソース**: Refinitiv Data Platform API
-- **データベース**: PostgreSQL
-- **言語**: Python 3.12
-- **主要ライブラリ**:
-  - `pandas` - データ処理
-  - `psycopg2` - PostgreSQL接続
-  - `matplotlib` - グラフ描画
-  - `refinitiv.data` - Refinitiv API
+```sql
+CREATE TABLE lme_copper_intraday_data (
+    id SERIAL PRIMARY KEY,
+    ric_code VARCHAR(10) NOT NULL,
+    interval VARCHAR(10) NOT NULL,
+    timestamp TIMESTAMP NOT NULL,
+    open DOUBLE PRECISION,
+    high DOUBLE PRECISION,
+    low DOUBLE PRECISION,
+    close DOUBLE PRECISION,
+    volume BIGINT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(ric_code, interval, timestamp)
+);
+
+CREATE INDEX idx_lme_intraday_ric_interval ON lme_copper_intraday_data(ric_code, interval);
+CREATE INDEX idx_lme_intraday_timestamp ON lme_copper_intraday_data(timestamp);
+```
+
+## 設定ファイル（config/metals_config.py）
+
+全メタルと全戦略の定義を一元管理：
+
+```python
+METALS_CONFIG = {
+    'copper': {'ric': 'CMCU3', 'name': '銅', 'name_en': 'Copper'},
+    'aluminium': {'ric': 'CMAL3', 'name': 'アルミニウム', 'name_en': 'Aluminium'},
+    'zinc': {'ric': 'CMZN3', 'name': '亜鉛', 'name_en': 'Zinc'},
+    'nickel': {'ric': 'CMNI3', 'name': 'ニッケル', 'name_en': 'Nickel'},
+    'lead': {'ric': 'CMPB3', 'name': '鉛', 'name_en': 'Lead'},
+    'tin': {'ric': 'CMSN3', 'name': '錫', 'name_en': 'Tin'}
+}
+
+STRATEGIES_CONFIG = {
+    'bollinger': {...},
+    'momentum': {...},
+    'rsi': {...},
+    'bb_rsi': {...}
+}
+```
+
+新しいメタルや戦略を追加する場合は、この設定ファイルのみを編集します。
 
 ## トラブルシューティング
 
-### エラー: "Refinitiv API接続失敗"
+### エラー: "No default session created yet"
 
-**原因**:
-- Refinitiv Workspace/Eikon Desktopアプリが起動していない
-- APIキーが正しく設定されていない
+**原因**: Refinitiv API セッションが初期化されていない
 
 **対処法**:
-1. Refinitiv Workspace を起動
-2. APIキーを確認（config.json または環境変数）
-3. ネットワーク接続を確認
+1. Refinitiv Workspace/Eikon Desktopアプリを起動
+2. アプリ内でログイン完了を確認
+3. スクリプト実行（自動的に`connect()`が呼ばれます）
+
+### エラー: "Not supported interval value"
+
+**原因**: Refinitiv APIがサポートしていないインターバルを指定
+
+**対処法**:
+- `15min`ではなく`1min`を取得
+- 必要に応じてpandasの`resample()`で変換
+
+サポート対象: `1min`, `5min`, `10min`, `30min`, `60min`, `hourly`, `daily`
 
 ### エラー: "データベース接続エラー"
 
-**原因**: PostgreSQLが起動していない、または接続情報が間違っている
-
 **対処法**:
 ```bash
-# PostgreSQLの状態を確認
-pg_ctl status
-
 # PostgreSQLを起動
 brew services start postgresql@14
 
 # データベースの存在を確認
 psql -U postgres -l
+
+# 必要に応じてデータベース作成
+createdb -U postgres lme_copper_db
 ```
 
-### エラー: "データが取得できませんでした"
+## 技術スタック
 
-**原因**:
-- 指定した期間にデータが存在しない（土日祝日など）
-- RICコードが無効または権限がない
-
-**対処法**:
-1. 営業日のデータを指定
-2. RICコードを確認（CMCU3は最も流動性が高い）
-3. Refinitivの権限を確認
+- **データソース**: Refinitiv Data Platform API
+- **データベース**: PostgreSQL 14+
+- **言語**: Python 3.12
+- **主要ライブラリ**:
+  - `pandas` - データ処理・リサンプリング
+  - `psycopg2` - PostgreSQL接続
+  - `matplotlib` - グラフ描画
+  - `refinitiv.data` - Refinitiv API クライアント
 
 ## ライセンス
 

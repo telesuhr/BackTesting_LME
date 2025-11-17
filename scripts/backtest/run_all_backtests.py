@@ -262,10 +262,10 @@ def save_visualization(
     metal_config = get_metal_config(metal_key)
     strategy_config = get_strategy_config(strategy_key)
 
-    # 日時フォルダ配下にメタル別フォルダを作成
-    output_dir = os.path.join(run_timestamp_dir, metal_key)
+    # 日時フォルダ直下に保存（メタル別フォルダは作成しない）
+    output_dir = run_timestamp_dir
     os.makedirs(output_dir, exist_ok=True)
-    output_file = os.path.join(output_dir, f"{strategy_key}_backtest_1year_100mt.png")
+    output_file = os.path.join(output_dir, f"{metal_key}_{strategy_key}_backtest.png")
 
     trades = result['trades']
 

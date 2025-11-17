@@ -55,9 +55,7 @@ def generate_summary_csv(results: List[Dict[str, Any]], output_dir: str = None, 
     if output_file is None:
         if output_dir is None:
             output_dir = OUTPUT_CONFIG['summary_dir']
-        else:
-            # 日時フォルダ配下にsummaryフォルダを作成
-            output_dir = os.path.join(output_dir, 'summary')
+        # 日時フォルダ直下に保存（summaryフォルダは作成しない）
         os.makedirs(output_dir, exist_ok=True)
         output_file = os.path.join(output_dir, 'performance_summary.csv')
 
@@ -109,9 +107,7 @@ def generate_summary_markdown(results: List[Dict[str, Any]], output_dir: str = N
     if output_file is None:
         if output_dir is None:
             output_dir = OUTPUT_CONFIG['summary_dir']
-        else:
-            # 日時フォルダ配下にsummaryフォルダを作成
-            output_dir = os.path.join(output_dir, 'summary')
+        # 日時フォルダ直下に保存（summaryフォルダは作成しない）
         os.makedirs(output_dir, exist_ok=True)
         output_file = os.path.join(output_dir, 'performance_summary.md')
 
@@ -264,7 +260,7 @@ def generate_all_summaries(results: List[Dict[str, Any]], output_dir: str = None
     logger.info("=" * 60)
     logger.info(f"対象結果数: {len(results)}件")
     if output_dir:
-        logger.info(f"出力先: {output_dir}/summary/")
+        logger.info(f"出力先: {output_dir}/")
 
     output_files = {}
 

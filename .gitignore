@@ -39,3 +39,7 @@ build/
 
 # Environment variables
 .env
+
+# Output files (backtest results)
+outputs/
+!outputs/.gitkeep

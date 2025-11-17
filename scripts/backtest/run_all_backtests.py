@@ -59,7 +59,11 @@ plt.rcParams['axes.unicode_minus'] = False
 
 
 def load_data(ric_code: str, start_date: str, end_date: str, interval: str = '15min') -> Optional[pd.DataFrame]:
-    """データベースからデータを読み込む"""
+    """
+    データベースからデータを読み込む
+
+    指定されたintervalのデータが存在しない場合、1minデータからリサンプリングします。
+    """
     try:
         conn = psycopg2.connect(
             host=DATABASE_CONFIG['host'],
@@ -81,21 +85,54 @@ def load_data(ric_code: str, start_date: str, end_date: str, interval: str = '15
         """
 
         df = pd.read_sql(query, conn, params=(ric_code, interval, start_date, end_date))
+
+        # 指定されたintervalでデータが見つからない場合、1minからリサンプリング
+        if df.empty and interval != '1min':
+            logger.warning(f"{interval}データが見つかりません。1minデータからリサンプリングします...")
+
+            # 1minデータを取得
+            df_1min = pd.read_sql(query, conn, params=(ric_code, '1min', start_date, end_date))
+
+            if df_1min.empty:
+                conn.close()
+                logger.error(f"1minデータも見つかりません: {ric_code} ({start_date} - {end_date})")
+                return None
+
+            df_1min.set_index('timestamp', inplace=True)
+
+            # データ型変換
+            for col in ['open', 'high', 'low', 'close']:
+                df_1min[col] = df_1min[col].astype(float)
+            if 'volume' in df_1min.columns:
+                df_1min['volume'] = df_1min['volume'].fillna(0).astype(int)
+
+            # リサンプリング（間隔ごとにルールを適用）
+            resample_rule = interval.upper() if interval in ['1d', 'daily'] else interval
+            df = df_1min.resample(resample_rule).agg({
+                'open': 'first',
+                'high': 'max',
+                'low': 'min',
+                'close': 'last',
+                'volume': 'sum'
+            }).dropna()
+
+            logger.info(f"リサンプリング完了: 1min → {interval}")
+        else:
+            df.set_index('timestamp', inplace=True)
+
+            for col in ['open', 'high', 'low', 'close']:
+                df[col] = df[col].astype(float)
+
+            if 'volume' in df.columns:
+                df['volume'] = df['volume'].fillna(0).astype(int)
+
         conn.close()
 
         if df.empty:
             logger.error(f"データが見つかりません: {ric_code} ({start_date} - {end_date})")
             return None
 
-        df.set_index('timestamp', inplace=True)
-
-        for col in ['open', 'high', 'low', 'close']:
-            df[col] = df[col].astype(float)
-
-        if 'volume' in df.columns:
-            df['volume'] = df['volume'].fillna(0).astype(int)
-
-        logger.info(f"データ読み込み成功: {ric_code}")
+        logger.info(f"データ読み込み成功: {ric_code} ({interval})")
         logger.info(f"  期間: {df.index.min()} ～ {df.index.max()}")
         logger.info(f"  データ数: {len(df):,}行")
 
@@ -103,10 +140,18 @@ def load_data(ric_code: str, start_date: str, end_date: str, interval: str = '15
 
     except Exception as e:
         logger.error(f"データベース読み込みエラー: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 
-def create_strategy_instance(strategy_key: str):
+def create_strategy_instance(
+    strategy_key: str,
+    custom_params: Optional[Dict[str, Any]] = None,
+    position_size: float = 100.0,
+    commission: float = 0.5,
+    spread: float = 0.0001
+):
     """
     戦略インスタンスを動的に作成
 
@@ -115,6 +160,13 @@ def create_strategy_instance(strategy_key: str):
     追加するだけで自動的に利用可能になります（スクリプト修正不要）。
 
     例: 'rsi' → 'src.strategy.rsi_reversal.RSIReversalStrategy'
+
+    Args:
+        strategy_key: 戦略キー
+        custom_params: カスタムパラメーター（戦略固有）
+        position_size: ポジションサイズ MT
+        commission: ブローカー手数料 USD
+        spread: スプレッド pct
     """
     strategy_config = get_strategy_config(strategy_key)
 
@@ -126,8 +178,41 @@ def create_strategy_instance(strategy_key: str):
     module = importlib.import_module(module_path)
     strategy_class = getattr(module, class_name)
 
-    # パラメーターを展開してインスタンス化
-    params = strategy_config['params']
+    # デフォルトパラメーターを取得
+    params = strategy_config['params'].copy()
+
+    # ポジションサイズを上書き（fixed_position_sizeパラメーター名を使用）
+    params['fixed_position_size'] = position_size
+
+    # 取引コストパラメーターを上書き
+    params['broker_commission_usd'] = commission
+    params['spread_pct'] = spread
+
+    # カスタムパラメーターで上書き（戦略固有）
+    if custom_params:
+        # RSI戦略用パラメーター
+        if strategy_key in ['rsi', 'bb_rsi']:
+            if 'rsi_period' in custom_params:
+                params['rsi_period'] = custom_params['rsi_period']
+            if 'rsi_oversold' in custom_params:
+                params['rsi_oversold'] = custom_params['rsi_oversold']
+            if 'rsi_overbought' in custom_params:
+                params['rsi_overbought'] = custom_params['rsi_overbought']
+
+        # ボリンジャーバンド用パラメーター
+        if strategy_key in ['bollinger', 'bb_rsi']:
+            if 'bb_period' in custom_params:
+                params['period'] = custom_params['bb_period']
+            if 'bb_std' in custom_params:
+                params['std'] = custom_params['bb_std']
+
+        # モメンタム用パラメーター
+        if strategy_key == 'momentum':
+            if 'ma_short' in custom_params:
+                params['short_ma'] = custom_params['ma_short']
+            if 'ma_long' in custom_params:
+                params['long_ma'] = custom_params['ma_long']
+
     return strategy_class(**params)
 
 
@@ -307,7 +392,13 @@ def run_single_backtest(
     strategy_key: str,
     run_timestamp_dir: str,
     start_date: Optional[str] = None,
-    end_date: Optional[str] = None
+    end_date: Optional[str] = None,
+    interval: str = '15min',
+    initial_capital: float = 100000.0,
+    position_size: float = 100.0,
+    commission: float = 0.5,
+    spread: float = 0.0001,
+    strategy_params: Optional[Dict[str, Any]] = None
 ) -> Optional[Dict[str, Any]]:
     """
     単一のバックテストを実行
@@ -318,6 +409,12 @@ def run_single_backtest(
         run_timestamp_dir: 実行日時フォルダのパス
         start_date: 開始日
         end_date: 終了日
+        interval: データ間隔
+        initial_capital: 初期資本
+        position_size: ポジションサイズ MT
+        commission: ブローカー手数料
+        spread: スプレッド
+        strategy_params: 戦略固有パラメーター
 
     Returns:
         バックテスト結果（失敗時はNone）
@@ -336,25 +433,35 @@ def run_single_backtest(
         if end_date is None:
             end_date = BACKTEST_CONFIG['end_date']
 
+        # データ間隔の正規化（daily → 1d）
+        if interval == 'daily':
+            interval = '1d'
+
         # データ読み込み
         data = load_data(
             ric_code=metal_config['ric'],
             start_date=start_date,
             end_date=end_date,
-            interval=BACKTEST_CONFIG['interval']
+            interval=interval
         )
 
         if data is None or data.empty:
             logger.error("データ読み込みに失敗しました")
             return None
 
-        # 戦略インスタンス作成
-        strategy = create_strategy_instance(strategy_key)
+        # 戦略インスタンス作成（パラメーターをカスタマイズ）
+        strategy = create_strategy_instance(
+            strategy_key,
+            strategy_params,
+            position_size,
+            commission,
+            spread
+        )
 
         # バックテスト実行
         result = strategy.backtest(
             data=data,
-            initial_capital=BACKTEST_CONFIG['initial_capital'],
+            initial_capital=initial_capital,
             risk_per_trade=BACKTEST_CONFIG['risk_per_trade']
         )
 
@@ -394,7 +501,13 @@ def run_all_backtests(
     metals: Optional[List[str]] = None,
     strategies: Optional[List[str]] = None,
     start_date: Optional[str] = None,
-    end_date: Optional[str] = None
+    end_date: Optional[str] = None,
+    interval: str = '15min',
+    initial_capital: float = 100000.0,
+    position_size: float = 100.0,
+    commission: float = 0.5,
+    spread: float = 0.0001,
+    strategy_params: Optional[Dict[str, Any]] = None
 ) -> List[Dict[str, Any]]:
     """
     全バックテストを実行
@@ -407,6 +520,12 @@ def run_all_backtests(
         strategies: 対象戦略リスト（Noneの場合は全戦略）
         start_date: 開始日
         end_date: 終了日
+        interval: データ間隔（1min, 5min, 15min, 1h, 1d等）
+        initial_capital: 初期資本
+        position_size: ポジションサイズ MT
+        commission: ブローカー手数料 USD
+        spread: スプレッド %
+        strategy_params: 戦略固有パラメーター
 
     Returns:
         全バックテスト結果のリスト
@@ -429,6 +548,9 @@ def run_all_backtests(
     logger.info(f"対象メタル: {', '.join(metals)}")
     logger.info(f"対象戦略: {', '.join(strategies)}")
     logger.info(f"組み合わせ数: {len(metals)} × {len(strategies)} = {len(metals) * len(strategies)}")
+    logger.info(f"データ間隔: {interval}")
+    logger.info(f"初期資本: ${initial_capital:,.0f}")
+    logger.info(f"ポジションサイズ: {position_size} MT")
     logger.info("=" * 60)
 
     results = []
@@ -447,7 +569,13 @@ def run_all_backtests(
                 strategy_key=strategy_key,
                 run_timestamp_dir=run_timestamp_dir,
                 start_date=start_date,
-                end_date=end_date
+                end_date=end_date,
+                interval=interval,
+                initial_capital=initial_capital,
+                position_size=position_size,
+                commission=commission,
+                spread=spread,
+                strategy_params=strategy_params
             )
 
             if result is not None:
@@ -528,6 +656,92 @@ def main():
         help='終了日（YYYY-MM-DD形式）'
     )
 
+    parser.add_argument(
+        '--interval',
+        type=str,
+        default='15min',
+        choices=['1min', '5min', '10min', '15min', '30min', '1h', '1d', 'daily'],
+        help='データ間隔 (デフォルト: 15min)'
+    )
+
+    parser.add_argument(
+        '--initial-capital',
+        type=float,
+        default=100000.0,
+        help='初期資本 (デフォルト: 100000)'
+    )
+
+    parser.add_argument(
+        '--position-size',
+        type=float,
+        default=100.0,
+        help='ポジションサイズ MT (デフォルト: 100)'
+    )
+
+    parser.add_argument(
+        '--commission',
+        type=float,
+        default=0.5,
+        help='ブローカー手数料 USD (デフォルト: 0.5)'
+    )
+
+    parser.add_argument(
+        '--spread',
+        type=float,
+        default=0.0001,
+        help='スプレッド pct (デフォルト: 0.0001)'
+    )
+
+    # 戦略固有パラメーター
+    parser.add_argument(
+        '--rsi-period',
+        type=int,
+        default=14,
+        help='RSI期間 (デフォルト: 14)'
+    )
+
+    parser.add_argument(
+        '--rsi-oversold',
+        type=float,
+        default=30.0,
+        help='RSI売られすぎ閾値 (デフォルト: 30)'
+    )
+
+    parser.add_argument(
+        '--rsi-overbought',
+        type=float,
+        default=70.0,
+        help='RSI買われすぎ閾値 (デフォルト: 70)'
+    )
+
+    parser.add_argument(
+        '--bb-period',
+        type=int,
+        default=20,
+        help='ボリンジャーバンド期間 (デフォルト: 20)'
+    )
+
+    parser.add_argument(
+        '--bb-std',
+        type=float,
+        default=2.0,
+        help='ボリンジャーバンド標準偏差 (デフォルト: 2.0)'
+    )
+
+    parser.add_argument(
+        '--ma-short',
+        type=int,
+        default=5,
+        help='モメンタム短期MA期間 (デフォルト: 5)'
+    )
+
+    parser.add_argument(
+        '--ma-long',
+        type=int,
+        default=20,
+        help='モメンタム長期MA期間 (デフォルト: 20)'
+    )
+
     args = parser.parse_args()
 
     # バックテスト実行
@@ -535,7 +749,21 @@ def main():
         metals=args.metals,
         strategies=args.strategies,
         start_date=args.start,
-        end_date=args.end
+        end_date=args.end,
+        interval=args.interval,
+        initial_capital=args.initial_capital,
+        position_size=args.position_size,
+        commission=args.commission,
+        spread=args.spread,
+        strategy_params={
+            'rsi_period': args.rsi_period,
+            'rsi_oversold': args.rsi_oversold,
+            'rsi_overbought': args.rsi_overbought,
+            'bb_period': args.bb_period,
+            'bb_std': args.bb_std,
+            'ma_short': args.ma_short,
+            'ma_long': args.ma_long
+        }
     )
 
     logger.info(f"\n全バックテスト完了！結果: {len(results)}件")

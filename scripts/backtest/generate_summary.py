@@ -40,22 +40,26 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def generate_summary_csv(results: List[Dict[str, Any]], output_file: str = None) -> str:
+def generate_summary_csv(results: List[Dict[str, Any]], output_dir: str = None, output_file: str = None) -> str:
     """
     結果をCSV形式で保存
 
     Args:
         results: バックテスト結果のリスト
+        output_dir: 出力先ディレクトリ（日時フォルダのパス）
         output_file: 出力ファイル名（Noneの場合は自動生成）
 
     Returns:
         保存したファイルパス
     """
     if output_file is None:
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        output_dir = OUTPUT_CONFIG['summary_dir']
+        if output_dir is None:
+            output_dir = OUTPUT_CONFIG['summary_dir']
+        else:
+            # 日時フォルダ配下にsummaryフォルダを作成
+            output_dir = os.path.join(output_dir, 'summary')
         os.makedirs(output_dir, exist_ok=True)
-        output_file = os.path.join(output_dir, f'performance_summary_{timestamp}.csv')
+        output_file = os.path.join(output_dir, 'performance_summary.csv')
 
     # DataFrame作成
     df = pd.DataFrame([
@@ -90,22 +94,26 @@ def generate_summary_csv(results: List[Dict[str, Any]], output_file: str = None)
     return output_file
 
 
-def generate_summary_markdown(results: List[Dict[str, Any]], output_file: str = None) -> str:
+def generate_summary_markdown(results: List[Dict[str, Any]], output_dir: str = None, output_file: str = None) -> str:
     """
     結果をMarkdown形式で保存
 
     Args:
         results: バックテスト結果のリスト
+        output_dir: 出力先ディレクトリ（日時フォルダのパス）
         output_file: 出力ファイル名（Noneの場合は自動生成）
 
     Returns:
         保存したファイルパス
     """
     if output_file is None:
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        output_dir = OUTPUT_CONFIG['summary_dir']
+        if output_dir is None:
+            output_dir = OUTPUT_CONFIG['summary_dir']
+        else:
+            # 日時フォルダ配下にsummaryフォルダを作成
+            output_dir = os.path.join(output_dir, 'summary')
         os.makedirs(output_dir, exist_ok=True)
-        output_file = os.path.join(output_dir, f'performance_summary_{timestamp}.md')
+        output_file = os.path.join(output_dir, 'performance_summary.md')
 
     # リターンで降順ソート
     sorted_results = sorted(results, key=lambda x: x['total_return'], reverse=True)
@@ -240,12 +248,13 @@ def generate_summary_markdown(results: List[Dict[str, Any]], output_file: str = 
     return output_file
 
 
-def generate_all_summaries(results: List[Dict[str, Any]]) -> Dict[str, str]:
+def generate_all_summaries(results: List[Dict[str, Any]], output_dir: str = None) -> Dict[str, str]:
     """
     全形式のサマリーを生成
 
     Args:
         results: バックテスト結果のリスト
+        output_dir: 出力先ディレクトリ（日時フォルダのパス）
 
     Returns:
         生成されたファイルのパス辞書
@@ -254,17 +263,19 @@ def generate_all_summaries(results: List[Dict[str, Any]]) -> Dict[str, str]:
     logger.info("サマリー生成開始")
     logger.info("=" * 60)
     logger.info(f"対象結果数: {len(results)}件")
+    if output_dir:
+        logger.info(f"出力先: {output_dir}/summary/")
 
     output_files = {}
 
     # CSV生成
     logger.info("\nCSV生成中...")
-    csv_file = generate_summary_csv(results)
+    csv_file = generate_summary_csv(results, output_dir=output_dir)
     output_files['csv'] = csv_file
 
     # Markdown生成
     logger.info("\nMarkdown生成中...")
-    md_file = generate_summary_markdown(results)
+    md_file = generate_summary_markdown(results, output_dir=output_dir)
     output_files['markdown'] = md_file
 
     logger.info("\n" + "=" * 60)

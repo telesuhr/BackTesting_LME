@@ -136,16 +136,22 @@ def save_visualization(
     result: Dict[str, Any],
     strategy_instance: Any,
     metal_key: str,
-    strategy_key: str
+    strategy_key: str,
+    run_timestamp_dir: str
 ) -> str:
-    """バックテスト結果を可視化して保存"""
+    """
+    バックテスト結果を可視化して保存
+
+    Args:
+        run_timestamp_dir: 実行日時フォルダのパス（例: outputs/20251117_153000）
+    """
     metal_config = get_metal_config(metal_key)
     strategy_config = get_strategy_config(strategy_key)
 
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    output_dir = os.path.join(OUTPUT_CONFIG['base_dir'], metal_key)
+    # 日時フォルダ配下にメタル別フォルダを作成
+    output_dir = os.path.join(run_timestamp_dir, metal_key)
     os.makedirs(output_dir, exist_ok=True)
-    output_file = os.path.join(output_dir, f"{strategy_key}_backtest_1year_100mt_{timestamp}.png")
+    output_file = os.path.join(output_dir, f"{strategy_key}_backtest_1year_100mt.png")
 
     trades = result['trades']
 
@@ -299,6 +305,7 @@ Avg Loss: ${result['avg_loss']/1000:.1f}k"""
 def run_single_backtest(
     metal_key: str,
     strategy_key: str,
+    run_timestamp_dir: str,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None
 ) -> Optional[Dict[str, Any]]:
@@ -308,6 +315,7 @@ def run_single_backtest(
     Args:
         metal_key: メタルキー
         strategy_key: 戦略キー
+        run_timestamp_dir: 実行日時フォルダのパス
         start_date: 開始日
         end_date: 終了日
 
@@ -356,7 +364,8 @@ def run_single_backtest(
             result=result,
             strategy_instance=strategy,
             metal_key=metal_key,
-            strategy_key=strategy_key
+            strategy_key=strategy_key,
+            run_timestamp_dir=run_timestamp_dir
         )
 
         # 結果に追加情報を付与
@@ -390,6 +399,9 @@ def run_all_backtests(
     """
     全バックテストを実行
 
+    実行時の日時フォルダを作成し、その配下に全結果を保存します。
+    例: outputs/20251117_153000/
+
     Args:
         metals: 対象メタルリスト（Noneの場合は全メタル）
         strategies: 対象戦略リスト（Noneの場合は全戦略）
@@ -405,9 +417,15 @@ def run_all_backtests(
     if strategies is None:
         strategies = get_all_strategies()
 
+    # 実行日時フォルダを作成
+    run_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    run_timestamp_dir = os.path.join(OUTPUT_CONFIG['base_dir'], run_timestamp)
+    os.makedirs(run_timestamp_dir, exist_ok=True)
+
     logger.info("=" * 60)
     logger.info("全メタル×全戦略 バックテスト実行")
     logger.info("=" * 60)
+    logger.info(f"実行日時フォルダ: {run_timestamp_dir}")
     logger.info(f"対象メタル: {', '.join(metals)}")
     logger.info(f"対象戦略: {', '.join(strategies)}")
     logger.info(f"組み合わせ数: {len(metals)} × {len(strategies)} = {len(metals) * len(strategies)}")
@@ -427,6 +445,7 @@ def run_all_backtests(
             result = run_single_backtest(
                 metal_key=metal_key,
                 strategy_key=strategy_key,
+                run_timestamp_dir=run_timestamp_dir,
                 start_date=start_date,
                 end_date=end_date
             )
@@ -444,6 +463,20 @@ def run_all_backtests(
     logger.info(f"成功: {success_count}/{total_count}組み合わせ")
     logger.info(f"失敗: {fail_count}/{total_count}組み合わせ")
     logger.info("=" * 60)
+
+    # サマリー生成（同じ日時フォルダ配下に保存）
+    if results:
+        try:
+            from generate_summary import generate_all_summaries
+            logger.info("\nサマリー生成中...")
+            summary_files = generate_all_summaries(results, output_dir=run_timestamp_dir)
+            logger.info("サマリー生成完了！")
+            logger.info(f"CSV: {summary_files.get('csv', 'N/A')}")
+            logger.info(f"Markdown: {summary_files.get('markdown', 'N/A')}")
+        except Exception as e:
+            logger.warning(f"サマリー生成に失敗しました: {e}")
+            import traceback
+            traceback.print_exc()
 
     return results
 
@@ -506,16 +539,7 @@ def main():
     )
 
     logger.info(f"\n全バックテスト完了！結果: {len(results)}件")
-
-    # サマリー生成
-    if results:
-        try:
-            from generate_summary import generate_all_summaries
-            logger.info("\nサマリー生成中...")
-            summary_files = generate_all_summaries(results)
-            logger.info("サマリー生成完了！")
-        except Exception as e:
-            logger.warning(f"サマリー生成に失敗しました: {e}")
+    # サマリー生成はrun_all_backtests関数内で自動実行されます
 
     # 終了コード設定
     exit_code = 0 if results else 1
